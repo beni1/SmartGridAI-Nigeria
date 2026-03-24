@@ -1,5 +1,7 @@
 # SmartGridAI Nigeria
 
+![License](https://img.shields.io/badge/license-MIT-green) ![Python](https://img.shields.io/badge/python-3.x-blue) ![Status](https://img.shields.io/badge/status-Active-brightgreen)
+
 Final project for the Building AI course
 
 ---
@@ -13,8 +15,6 @@ SmartGridAI Nigeria is a simple AI-based project that predicts electricity deman
 ## Background
 
 Nigeria faces frequent electricity instability due to poor demand forecasting, infrastructure limitations, and inefficient planning.
-
-This project explores how AI can help address these challenges by predicting electricity demand patterns.
 
 Problems addressed:
 * Unreliable electricity supply  
@@ -47,13 +47,23 @@ Users:
 ## Data sources and AI methods
 
 ### Data sources:
-* Open electricity datasets (e.g., World Bank, ElectricityMaps)
+* Open electricity datasets (World Bank, ElectricityMaps)  
 * Publicly available Nigerian energy statistics  
 
 ### AI methods:
 * Linear Regression (baseline model)  
 * Time-series forecasting (future improvement)  
 * Data visualization (matplotlib / dashboards)  
+
+---
+
+## Screenshots
+
+### 📊 Electricity Demand Prediction
+![Dashboard](images/dashboard.png)
+
+### ⚠ High Demand Alerts
+![High Demand Alert](images/high_demand_alert.png)
 
 ---
 
@@ -82,11 +92,21 @@ Future improvements:
 
 ---
 
-## Acknowledgments
+## Demo
 
-* Open data providers (World Bank, ElectricityMaps)  
-* Building AI course materials  
-* Inspiration from AI applications in energy systems  
+This project demonstrates how AI can predict electricity demand trends in Nigeria using simple machine learning models.
+
+Future versions will include real-time dashboards, advanced forecasting, and high-demand alerts.
+
+---
+
+## Contact
+
+Created by Sunday Ibeni Akpomuje
+
+Connect or collaborate:
+- LinkedIn:  
+- Email: benak9979@gmail.com
 
 ---
 
