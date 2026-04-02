@@ -1,0 +1,12 @@
+# src/model.py
+
+from sklearn.linear_model import LinearRegression
+import numpy as np
+
+def train_model(X, y):
+    model = LinearRegression()
+    model.fit(X, y)
+    return model
+
+def predict(model, X):
+    return model.predict(X)

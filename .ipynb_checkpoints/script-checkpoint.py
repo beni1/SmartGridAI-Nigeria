@@ -1,0 +1,1 @@
+print("SmartGridAI is working!")
