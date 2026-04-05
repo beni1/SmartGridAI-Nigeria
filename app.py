@@ -61,7 +61,7 @@ else:
 # -----------------------------
 # LIVE CHART
 # -----------------------------
-st.subheader("📊 Live Demand Chart")
+
 
 import matplotlib.pyplot as plt
 
