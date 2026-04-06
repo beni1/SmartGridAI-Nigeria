@@ -35,7 +35,7 @@ st.divider()
 # WEATHER API FUNCTION
 # -----------------------------
 def get_weather():
-    API_KEY = "e18d33bd3d9e2e32a24a560bb6382ceb"
+    API_KEY = st.secrets["OPENWEATHER_API_KEY"]
     city = "Lagos"
 
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
