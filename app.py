@@ -68,7 +68,7 @@ st.sidebar.write(
 # -----------------------------
 df = pd.read_csv("data/demand_large.csv")
 
-X = df[["time"]]
+X = df[["time", "temperature"]]
 y = df["consumption"]
 model = train_model(X, y)
 
@@ -88,7 +88,10 @@ st.session_state.time_step += 1
 current_time = st.session_state.time_step
 
 # Prediction (you can later include temperature as feature)
-future_df = pd.DataFrame([[current_time]], columns=["time"])
+future_df = pd.DataFrame(
+    [[current_time, temperature]],
+    columns=["time", "temperature"]
+)
 prediction = predict(model, future_df)
 
 # Store history
