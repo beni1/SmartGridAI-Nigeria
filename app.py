@@ -140,4 +140,4 @@ st.pyplot(fig)
 # -----------------------------
 time.sleep(2)
 st.rerun()
-st.write("Input:", future_df)
+
