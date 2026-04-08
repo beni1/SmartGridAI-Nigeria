@@ -70,6 +70,11 @@ df = pd.read_csv("data/demand_large.csv")
 
 X = df[["time", "temperature"]]
 y = df["consumption"]
+
+# If using predictions
+if "predicted_consumption" in df.columns:
+    st.line_chart(df[["consumption", "predicted_consumption"]])
+
 model = train_model(X, y)
 
 # -----------------------------
