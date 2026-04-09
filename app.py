@@ -1,148 +1,55 @@
-import streamlit as st
 import pandas as pd
-import sys, os
-import time
-import matplotlib.pyplot as plt
-import datetime
-import requests
+import numpy as np
+import streamlit as st
+from sklearn.linear_model import LinearRegression
 
-# Fix import path
-sys.path.append(os.path.abspath("."))
+st.title("⚡ SmartGridAI - Energy Demand Dashboard")
 
-from src.model import train_model, predict
-from src.alerts import high_demand_alert
-
-# -----------------------------
-# PAGE CONFIG + STYLE (FINTECH UI)
-# -----------------------------
-st.set_page_config(layout="wide")
-
-st.markdown(
-    """
-    <style>
-    body { background-color: #0E1117; color: white; }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-st.title("⚡ SmartGridAI Nigeria Dashboard")
-st.caption("Real-time AI-powered electricity demand monitoring system")
-
-st.divider()
-
-# -----------------------------
-# WEATHER API FUNCTION
-# -----------------------------
-def get_weather():
-    API_KEY = st.secrets["OPENWEATHER_API_KEY"]
-    city = "Lagos"
-
-    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
-
-    try:
-        response = requests.get(url)
-        data = response.json()
-        temp = data["main"]["temp"]
-        return temp
-    except:
-        return 30  # fallback value
-
-# -----------------------------
-# SIDEBAR (PRO UI)
-# -----------------------------
-st.sidebar.title("⚙️ Control Panel")
-
-threshold = st.sidebar.slider("Alert Threshold", 100, 1000, 600)
-
-temperature = get_weather()
-st.sidebar.metric("🌡️ Lagos Temp", f"{temperature}°C")
-
-st.sidebar.markdown("### About")
-st.sidebar.write(
-    "SmartGridAI monitors electricity demand using AI + real-time weather data."
-)
-
-# -----------------------------
-# LOAD DATA + MODEL
-# -----------------------------
+# Load data
 df = pd.read_csv("data/demand_large.csv")
 
+# =========================
+# STEP 1: Train Model
+# =========================
 X = df[["time", "temperature"]]
 y = df["consumption"]
 
-# If using predictions
-if "predicted_consumption" in df.columns:
-    st.line_chart(df[["consumption", "predicted_consumption"]])
+model = LinearRegression()
+model.fit(X, y)
 
-model = train_model(X, y)
+# Predictions
+df["predicted"] = model.predict(X)
 
-# -----------------------------
-# REAL-TIME SYSTEM
-# -----------------------------
-st.subheader("⚡ Live SmartGridAI Monitoring")
+# =========================
+# STEP 2: Real vs Predicted
+# =========================
+st.subheader("📊 Real vs Predicted Consumption")
+st.line_chart(df[["consumption", "predicted"]])
 
-if "time_step" not in st.session_state:
-    st.session_state.time_step = 1000
+# =========================
+# STEP 3: Temperature Effect
+# =========================
+st.subheader("🌡️ Temperature vs Consumption")
+st.scatter_chart(df[["temperature", "consumption"]])
 
-if "history" not in st.session_state:
-    st.session_state.history = []
+# =========================
+# STEP 4: Future Forecast
+# =========================
+future_time = np.arange(df["time"].max() + 1, df["time"].max() + 21)
+future_temp = 28 + 5 * np.sin(future_time / 50)
 
-# Time update
-st.session_state.time_step += 1
-current_time = st.session_state.time_step
+future_df = pd.DataFrame({
+    "time": future_time,
+    "temperature": future_temp
+})
 
-# Prediction (you can later include temperature as feature)
-future_df = pd.DataFrame(
-    [[current_time, temperature]],
-    columns=["time", "temperature"]
-)
-prediction = predict(model, future_df)
+future_df["predicted"] = model.predict(future_df)
 
-# Store history
-st.session_state.history.append(float(prediction[0]))
-st.session_state.history = st.session_state.history[-50:]
+st.subheader("🔮 Future Demand Forecast")
+st.line_chart(future_df[["predicted"]])
 
-# -----------------------------
-# METRICS (FINTECH STYLE)
-# -----------------------------
-col1, col2, col3 = st.columns(3)
-
-col1.metric("⏱ Time", current_time)
-col2.metric("⚡ Demand", f"{float(prediction[0]):.2f}")
-col3.metric("🚨 Threshold", threshold)
-
-st.divider()
-
-# -----------------------------
-# ALERT SYSTEM
-# -----------------------------
-if high_demand_alert(prediction[0], threshold):
-    st.error("🚨 GRID OVERLOAD RISK")
-else:
-    st.success("🟢 GRID STABLE")
-
-st.divider()
-
-# -----------------------------
-# CHART (FINTECH STYLE)
-# -----------------------------
-st.subheader("📊 Real-Time Demand Trend")
-
-fig, ax = plt.subplots()
-
-ax.plot(st.session_state.history, linewidth=3)
-ax.set_facecolor("#111")
-ax.set_title("Electricity Demand Over Time")
-ax.set_xlabel("Time Step")
-ax.set_ylabel("Demand")
-ax.grid(color="gray", linestyle="--", linewidth=0.5)
-
-st.pyplot(fig)
-
-# -----------------------------
-# AUTO REFRESH
-# -----------------------------
-time.sleep(2)
-st.rerun()
-
+# =========================
+# Extra: Show raw data
+# =========================
+if st.checkbox("Show Raw Data"):
+    st.write(df.head())
