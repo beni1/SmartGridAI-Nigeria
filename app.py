@@ -51,5 +51,7 @@ st.line_chart(future_df[["predicted"]])
 # =========================
 # Extra: Show raw data
 # =========================
+st.subheader("📂 Data Viewer")
+
 if st.checkbox("Show Raw Data"):
-    st.write(df.head())
+    st.dataframe(df)
