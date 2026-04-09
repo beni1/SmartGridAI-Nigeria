@@ -51,4 +51,8 @@ st.line_chart(future_df[["predicted"]])
 # =========================
 # Extra: Show raw data
 # =========================
+show_data = st.checkbox("Show Raw Data")
 
+if show_data:
+    st.subheader("📂 Raw Data")
+    st.dataframe(df)
