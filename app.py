@@ -55,3 +55,5 @@ show_data = st.checkbox("Show Raw Data")
 
 if show_data:
     st.write(df)
+
+st.write(df.shape)
