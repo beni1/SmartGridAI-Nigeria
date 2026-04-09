@@ -56,3 +56,5 @@ show_data = st.checkbox("Show Raw Data")
 if show_data:
     st.subheader("📂 Raw Data")
     st.dataframe(df)
+
+st.write("Checkbox value:", show_data)
