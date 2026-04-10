@@ -14,7 +14,8 @@ df = pd.read_csv("data/demand_large.csv")
 X = df[["time", "temperature"]]
 y = df["consumption"]
 
-model = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42)model.fit(X, y)
+model = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42)
+model.fit(X, y)
 
 # Predictions
 df["predicted"] = model.predict(X)
