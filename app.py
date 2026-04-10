@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import streamlit as st
-from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
 
 st.title("⚡ SmartGridAI - Energy Demand Dashboard")
 
@@ -14,8 +14,7 @@ df = pd.read_csv("data/demand_large.csv")
 X = df[["time", "temperature"]]
 y = df["consumption"]
 
-model = LinearRegression()
-model.fit(X, y)
+model = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42)model.fit(X, y)
 
 # Predictions
 df["predicted"] = model.predict(X)
@@ -56,4 +55,4 @@ show_data = st.checkbox("Show Raw Data")
 if show_data:
     st.write(df)
 
-st.write(df.shape)
+
