@@ -9,9 +9,16 @@ st.title("⚡ SmartGridAI - Energy Demand Dashboard")
 df = pd.read_csv("data/demand_large.csv")
 
 # =========================
-# STEP 1: Train Model
+# STEP 1: Feature Engineering (REAL FIX)
 # =========================
-X = df[["time", "temperature"]]
+df["time_squared"] = df["time"] ** 2
+df["sin_time"] = np.sin(df["time"] / 10)
+df["cos_time"] = np.cos(df["time"] / 10)
+
+# =========================
+# STEP 2: Train Model
+# =========================
+X = df[["time", "temperature", "time_squared", "sin_time", "cos_time"]]
 y = df["consumption"]
 
 model = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42)
@@ -21,19 +28,19 @@ model.fit(X, y)
 df["predicted"] = model.predict(X)
 
 # =========================
-# STEP 2: Real vs Predicted
+# STEP 3: Real vs Predicted
 # =========================
 st.subheader("📊 Real vs Predicted Consumption")
 st.line_chart(df[["consumption", "predicted"]])
 
 # =========================
-# STEP 3: Temperature Effect
+# STEP 4: Temperature Effect
 # =========================
 st.subheader("🌡️ Temperature vs Consumption")
 st.scatter_chart(df[["temperature", "consumption"]])
 
 # =========================
-# STEP 4: Future Forecast
+# STEP 5: Future Forecast (UPDATED)
 # =========================
 future_time = np.arange(df["time"].max() + 1, df["time"].max() + 21)
 future_temp = 28 + 5 * np.sin(future_time / 50)
@@ -43,7 +50,14 @@ future_df = pd.DataFrame({
     "temperature": future_temp
 })
 
-future_df["predicted"] = model.predict(future_df)
+# IMPORTANT: same features as training
+future_df["time_squared"] = future_df["time"] ** 2
+future_df["sin_time"] = np.sin(future_df["time"] / 10)
+future_df["cos_time"] = np.cos(future_df["time"] / 10)
+
+future_df["predicted"] = model.predict(
+    future_df[["time", "temperature", "time_squared", "sin_time", "cos_time"]]
+)
 
 st.subheader("🔮 Future Demand Forecast")
 st.line_chart(future_df[["predicted"]])
@@ -54,6 +68,5 @@ st.line_chart(future_df[["predicted"]])
 show_data = st.checkbox("Show Raw Data")
 
 if show_data:
-    st.write(df)
-
+    st.dataframe(df)
 
