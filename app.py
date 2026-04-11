@@ -1,9 +1,24 @@
 import pandas as pd
 import numpy as np
 import streamlit as st
-from sklearn.ensemble import RandomForestRegressor
+import time
+import requests
+import smtplib
+from email.mime.text import MIMEText
 
-st.title("⚡ SmartGridAI - Advanced Time-Series Dashboard (No LSTM)")
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error
+
+st.title("⚡ SmartGridAI - Intelligent Energy Dashboard")
+
+# =========================
+# SIDEBAR (PRO UI)
+# =========================
+st.sidebar.header("⚙️ Controls")
+
+threshold_multiplier = st.sidebar.slider("Alert Sensitivity", 1.0, 3.0, 2.0)
+num_points = st.sidebar.slider("Data Points", 50, 500, 200)
 
 # =========================
 # LOAD DATA
@@ -11,26 +26,35 @@ st.title("⚡ SmartGridAI - Advanced Time-Series Dashboard (No LSTM)")
 df = pd.read_csv("data/demand_large.csv")
 
 # =========================
-# FEATURE ENGINEERING (TIME INTELLIGENCE)
+# 🌍 REAL-TIME DATA (Weather API)
+# =========================
+try:
+    url = "https://api.open-meteo.com/v1/forecast?latitude=60.17&longitude=24.94&current_weather=true"
+    data = requests.get(url).json()
+    live_temp = data["current_weather"]["temperature"]
+    st.sidebar.write(f"🌡️ Live Temp: {live_temp}°C")
+    df["temperature"].iloc[-1] = live_temp
+except:
+    st.sidebar.write("⚠️ Live weather unavailable")
+
+# =========================
+# FEATURE ENGINEERING
 # =========================
 df["time_squared"] = df["time"] ** 2
 df["sin_time"] = np.sin(df["time"] / 10)
 df["cos_time"] = np.cos(df["time"] / 10)
 
-# 🔥 LAG FEATURES (THIS REPLACES LSTM MEMORY)
 df["lag_1"] = df["consumption"].shift(1)
 df["lag_2"] = df["consumption"].shift(2)
 df["lag_3"] = df["consumption"].shift(3)
 
-# 🔥 ROLLING FEATURES (TREND AWARENESS)
 df["rolling_mean"] = df["consumption"].rolling(window=5).mean()
 df["rolling_std"] = df["consumption"].rolling(window=5).std()
 
-# Drop NaNs from lagging
 df = df.dropna()
 
 # =========================
-# MODEL TRAINING
+# MODELS
 # =========================
 features = [
     "time", "temperature",
@@ -42,31 +66,61 @@ features = [
 X = df[features]
 y = df["consumption"]
 
-model = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42)
-model.fit(X, y)
+# RandomForest
+rf_model = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42)
+rf_model.fit(X, y)
+df["rf_pred"] = rf_model.predict(X)
 
-df["predicted"] = model.predict(X)
+# Linear Regression (comparison)
+lr_model = LinearRegression()
+lr_model.fit(X, y)
+df["lr_pred"] = lr_model.predict(X)
 
 # =========================
-# HIGH DEMAND ALERT SYSTEM
+# ALERT SYSTEM
 # =========================
-threshold = df["consumption"].mean() + 2 * df["consumption"].std()
-df["alert"] = df["predicted"] > threshold
+threshold = df["consumption"].mean() + threshold_multiplier * df["consumption"].std()
+df["alert"] = df["rf_pred"] > threshold
+
+# =========================
+# 📩 EMAIL FUNCTION
+# =========================
+def send_email_alert(message):
+    sender = "your_email@gmail.com"
+    password = "your_app_password"
+    receiver = "receiver_email@gmail.com"
+
+    msg = MIMEText(message)
+    msg["Subject"] = "⚡ SmartGrid Alert"
+    msg["From"] = sender
+    msg["To"] = receiver
+
+    try:
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server.login(sender, password)
+        server.send_message(msg)
+        server.quit()
+        st.success("📩 Email Sent!")
+    except Exception as e:
+        st.error(f"Email failed: {e}")
 
 # =========================
 # DASHBOARD
 # =========================
-st.subheader("📊 Real vs Predicted (Time-Aware Model)")
-st.line_chart(df[["consumption", "predicted"]])
+st.subheader("📊 Model Comparison")
+st.line_chart(df.tail(num_points)[["consumption", "rf_pred", "lr_pred"]])
 
 st.subheader("🌡️ Temperature vs Consumption")
 st.scatter_chart(df[["temperature", "consumption"]])
 
+# KPIs
+st.metric("⚡ Current Demand", int(df["consumption"].iloc[-1]))
+st.metric("🔮 RF Prediction", int(df["rf_pred"].iloc[-1]))
+
 # =========================
-# FUTURE FORECAST (SMART)
+# FUTURE FORECAST
 # =========================
 future_steps = 20
-
 last_row = df.iloc[-1].copy()
 future_predictions = []
 
@@ -87,12 +141,9 @@ for i in range(future_steps):
         "rolling_std": df["consumption"].tail(5).std()
     }
 
-    new_df = pd.DataFrame([new_row])
-    pred = model.predict(new_df)[0]
-
+    pred = rf_model.predict(pd.DataFrame([new_row]))[0]
     future_predictions.append(pred)
 
-    # update last_row for next step (simulate sequence)
     last_row["lag_2"] = last_row["lag_1"]
     last_row["lag_1"] = last_row["consumption"]
     last_row["consumption"] = pred
@@ -100,7 +151,7 @@ for i in range(future_steps):
 
 future_df = pd.DataFrame({"predicted": future_predictions})
 
-st.subheader("🔮 Future Forecast (Sequence-Aware)")
+st.subheader("🔮 Future Forecast")
 st.line_chart(future_df)
 
 # =========================
@@ -113,6 +164,11 @@ alerts = df[df["alert"] == True]
 if not alerts.empty:
     st.warning("⚠️ High Demand Detected!")
     st.dataframe(alerts)
+
+    # Send email
+    if st.button("Send Alert Email"):
+        send_email_alert("⚠️ High energy demand detected!")
+
 else:
     st.success("✅ System Stable")
 
@@ -121,3 +177,9 @@ else:
 # =========================
 if st.checkbox("Show Raw Data"):
     st.dataframe(df)
+
+# =========================
+# 🔄 AUTO REFRESH (REAL-TIME SIMULATION)
+# =========================
+time.sleep(5)
+st.experimental_rerun()
