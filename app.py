@@ -182,4 +182,4 @@ if st.checkbox("Show Raw Data"):
 # 🔄 AUTO REFRESH (REAL-TIME SIMULATION)
 # =========================
 time.sleep(5)
-st.experimental_rerun()
+st.rerun()
