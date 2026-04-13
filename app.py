@@ -1,185 +1,166 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
-import streamlit as st
-import time
-import requests
-import smtplib
-from email.mime.text import MIMEText
-
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error
-
-st.title("⚡ SmartGridAI - Intelligent Energy Dashboard")
+import yagmail
+import os
 
 # =========================
-# SIDEBAR (PRO UI)
+# PAGE CONFIG
 # =========================
-st.sidebar.header("⚙️ Controls")
+st.set_page_config(page_title="SmartGridAI", layout="wide")
 
-threshold_multiplier = st.sidebar.slider("Alert Sensitivity", 1.0, 3.0, 2.0)
-num_points = st.sidebar.slider("Data Points", 50, 500, 200)
+# =========================
+# TITLE
+# =========================
+st.title("⚡ SmartGridAI Dashboard")
+st.markdown("AI-powered Energy Demand Forecasting & Alert System")
+
+# =========================
+# SIDEBAR CONTROLS
+# =========================
+st.sidebar.header("Controls")
+
+num_days = st.sidebar.slider("Select Days", 1, 30, 7)
+temp_input = st.sidebar.slider("Temperature (°C)", 20, 45, 30)
+threshold = st.sidebar.slider("Alert Threshold (MW)", 100, 1000, 500)
 
 # =========================
 # LOAD DATA
 # =========================
-df = pd.read_csv("data/demand_large.csv")
+@st.cache_data
+def load_data():
+    return pd.read_csv("data/demand_large.csv")
+
+df = load_data()
 
 # =========================
-# 🌍 REAL-TIME DATA (Weather API)
+# MODEL
 # =========================
-try:
-    url = "https://api.open-meteo.com/v1/forecast?latitude=60.17&longitude=24.94&current_weather=true"
-    data = requests.get(url).json()
-    live_temp = data["current_weather"]["temperature"]
-    st.sidebar.write(f"🌡️ Live Temp: {live_temp}°C")
-    df["temperature"].iloc[-1] = live_temp
-except:
-    st.sidebar.write("⚠️ Live weather unavailable")
-
-# =========================
-# FEATURE ENGINEERING
-# =========================
-df["time_squared"] = df["time"] ** 2
-df["sin_time"] = np.sin(df["time"] / 10)
-df["cos_time"] = np.cos(df["time"] / 10)
-
-df["lag_1"] = df["consumption"].shift(1)
-df["lag_2"] = df["consumption"].shift(2)
-df["lag_3"] = df["consumption"].shift(3)
-
-df["rolling_mean"] = df["consumption"].rolling(window=5).mean()
-df["rolling_std"] = df["consumption"].rolling(window=5).std()
-
-df = df.dropna()
-
-# =========================
-# MODELS
-# =========================
-features = [
-    "time", "temperature",
-    "time_squared", "sin_time", "cos_time",
-    "lag_1", "lag_2", "lag_3",
-    "rolling_mean", "rolling_std"
-]
-
-X = df[features]
+X = df[["time", "temperature"]]
 y = df["consumption"]
 
-# RandomForest
-rf_model = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42)
-rf_model.fit(X, y)
-df["rf_pred"] = rf_model.predict(X)
-
-# Linear Regression (comparison)
-lr_model = LinearRegression()
-lr_model.fit(X, y)
-df["lr_pred"] = lr_model.predict(X)
+model = RandomForestRegressor(n_estimators=200, random_state=42)
+model.fit(X, y)
 
 # =========================
-# ALERT SYSTEM
+# PREDICTION
 # =========================
-threshold = df["consumption"].mean() + threshold_multiplier * df["consumption"].std()
-df["alert"] = df["rf_pred"] > threshold
+future_time = np.arange(len(df), len(df) + num_days)
+future_temp = np.full(num_days, temp_input)
+
+future_df = pd.DataFrame({
+    "time": future_time,
+    "temperature": future_temp
+})
+
+predictions = model.predict(future_df)
 
 # =========================
-# 📩 EMAIL FUNCTION
+# METRICS
 # =========================
-def send_email_alert(message):
-    sender = "your_email@gmail.com"
-    password = "your_app_password"
-    receiver = "receiver_email@gmail.com"
+col1, col2, col3 = st.columns(3)
 
-    msg = MIMEText(message)
-    msg["Subject"] = "⚡ SmartGrid Alert"
-    msg["From"] = sender
-    msg["To"] = receiver
+col1.metric("Avg Demand", f"{int(np.mean(predictions))} MW")
+col2.metric("Peak Demand", f"{int(np.max(predictions))} MW")
+col3.metric("Min Demand", f"{int(np.min(predictions))} MW")
 
+# =========================
+# CHART
+# =========================
+st.subheader("📊 Demand Forecast")
+
+chart_df = pd.DataFrame({
+    "Day": range(num_days),
+    "Predicted Demand": predictions
+})
+
+st.line_chart(chart_df.set_index("Day"))
+
+# =========================
+# TABLE
+# =========================
+st.subheader("📋 Forecast Data")
+st.dataframe(chart_df)
+
+# =========================
+# SUBSCRIPTION SYSTEM
+# =========================
+st.subheader("📩 Subscribe for Alerts")
+
+subscriber_email = st.text_input("Enter your email")
+
+def save_subscriber(email):
+    if email:
+        with open("subscribers.txt", "a+") as f:
+            f.seek(0)
+            emails = f.read().splitlines()
+            if email not in emails:
+                f.write(email + "\n")
+                return True
+    return False
+
+if st.button("Subscribe"):
+    if save_subscriber(subscriber_email):
+        st.success("✅ Subscribed successfully!")
+    else:
+        st.warning("⚠️ Already subscribed or invalid input")
+
+def get_subscribers():
     try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        server.login(sender, password)
-        server.send_message(msg)
-        server.quit()
-        st.success("📩 Email Sent!")
+        with open("subscribers.txt", "r") as f:
+            return [line.strip() for line in f.readlines()]
+    except FileNotFoundError:
+        return []
+
+# =========================
+# EMAIL FUNCTION (SECURE)
+# =========================
+def send_bulk_alert(message):
+    try:
+        yag = yagmail.SMTP(
+            user=os.getenv("EMAIL_USER"),
+            password=os.getenv("EMAIL_PASS")
+        )
+
+        subscribers = get_subscribers()
+
+        for email in subscribers:
+            yag.send(
+                to=email,
+                subject="⚡ SmartGridAI Alert",
+                contents=message
+            )
+
+        return True, len(subscribers)
+
     except Exception as e:
-        st.error(f"Email failed: {e}")
+        return False, str(e)
 
 # =========================
-# DASHBOARD
+# ALERT LOGIC
 # =========================
-st.subheader("📊 Model Comparison")
-st.line_chart(df.tail(num_points)[["consumption", "rf_pred", "lr_pred"]])
+if np.max(predictions) > threshold:
+    st.error("⚠️ High Demand Alert!")
 
-st.subheader("🌡️ Temperature vs Consumption")
-st.scatter_chart(df[["temperature", "consumption"]])
+    success, info = send_bulk_alert(
+        f"High energy demand detected: {int(np.max(predictions))} MW"
+    )
 
-# KPIs
-st.metric("⚡ Current Demand", int(df["consumption"].iloc[-1]))
-st.metric("🔮 RF Prediction", int(df["rf_pred"].iloc[-1]))
-
-# =========================
-# FUTURE FORECAST
-# =========================
-future_steps = 20
-last_row = df.iloc[-1].copy()
-future_predictions = []
-
-for i in range(future_steps):
-    new_time = last_row["time"] + 1
-    new_temp = 28 + 5 * np.sin(new_time / 50)
-
-    new_row = {
-        "time": new_time,
-        "temperature": new_temp,
-        "time_squared": new_time ** 2,
-        "sin_time": np.sin(new_time / 10),
-        "cos_time": np.cos(new_time / 10),
-        "lag_1": last_row["consumption"],
-        "lag_2": last_row["lag_1"],
-        "lag_3": last_row["lag_2"],
-        "rolling_mean": df["consumption"].tail(5).mean(),
-        "rolling_std": df["consumption"].tail(5).std()
-    }
-
-    pred = rf_model.predict(pd.DataFrame([new_row]))[0]
-    future_predictions.append(pred)
-
-    last_row["lag_2"] = last_row["lag_1"]
-    last_row["lag_1"] = last_row["consumption"]
-    last_row["consumption"] = pred
-    last_row["time"] = new_time
-
-future_df = pd.DataFrame({"predicted": future_predictions})
-
-st.subheader("🔮 Future Forecast")
-st.line_chart(future_df)
+    if success:
+        st.success(f"📧 Alert sent to {info} subscribers!")
+    else:
+        st.warning(f"Email failed: {info}")
 
 # =========================
-# ALERTS
+# TEST BUTTON
 # =========================
-st.subheader("🚨 High Demand Alerts")
+st.subheader("🧪 Test Alert System")
 
-alerts = df[df["alert"] == True]
+if st.button("Send Test Alert to Subscribers"):
+    success, info = send_bulk_alert("Test alert from SmartGridAI 🚀")
 
-if not alerts.empty:
-    st.warning("⚠️ High Demand Detected!")
-    st.dataframe(alerts)
-
-    # Send email
-    if st.button("Send Alert Email"):
-        send_email_alert("⚠️ High energy demand detected!")
-
-else:
-    st.success("✅ System Stable")
-
-# =========================
-# RAW DATA
-# =========================
-if st.checkbox("Show Raw Data"):
-    st.dataframe(df)
-
-# =========================
-# 🔄 AUTO REFRESH (REAL-TIME SIMULATION)
-# =========================
-time.sleep(5)
-st.rerun()
+    if success:
+        st.success(f"Test email sent to {info} subscribers!")
+    else:
+        st.error(f"Error: {info}")
