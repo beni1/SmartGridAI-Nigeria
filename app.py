@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 import yagmail
 import os
+import datetime
 
 # =========================
 # PAGE CONFIG
@@ -55,6 +56,7 @@ future_df = pd.DataFrame({
 })
 
 predictions = model.predict(future_df)
+peak_demand = int(np.max(predictions))
 
 # =========================
 # METRICS
@@ -62,17 +64,26 @@ predictions = model.predict(future_df)
 col1, col2, col3 = st.columns(3)
 
 col1.metric("Avg Demand", f"{int(np.mean(predictions))} MW")
-col2.metric("Peak Demand", f"{int(np.max(predictions))} MW")
+col2.metric("Peak Demand", f"{peak_demand} MW")
 col3.metric("Min Demand", f"{int(np.min(predictions))} MW")
 
 # =========================
-# CHART
+# ALERT STATUS BADGE
+# =========================
+if peak_demand > threshold:
+    st.error("🔴 Alert Status: CRITICAL")
+else:
+    st.success("🟢 Alert Status: NORMAL")
+
+# =========================
+# CHART WITH THRESHOLD LINE
 # =========================
 st.subheader("📊 Demand Forecast")
 
 chart_df = pd.DataFrame({
     "Day": range(num_days),
-    "Predicted Demand": predictions
+    "Predicted Demand": predictions,
+    "Threshold": [threshold] * num_days
 })
 
 st.line_chart(chart_df.set_index("Day"))
@@ -114,9 +125,9 @@ def get_subscribers():
         return []
 
 # =========================
-# EMAIL FUNCTION (SECURE)
+# EMAIL FUNCTION
 # =========================
-def send_bulk_alert(message):
+def send_bulk_alert(message, subject):
     try:
         yag = yagmail.SMTP(
             user=os.getenv("EMAIL_USER"),
@@ -128,7 +139,7 @@ def send_bulk_alert(message):
         for email in subscribers:
             yag.send(
                 to=email,
-                subject="⚡ SmartGridAI Alert",
+                subject=subject,
                 contents=message
             )
 
@@ -138,19 +149,57 @@ def send_bulk_alert(message):
         return False, str(e)
 
 # =========================
-# ALERT LOGIC
+# ALERT LOGGING
 # =========================
-if np.max(predictions) > threshold:
+def log_alert(demand, threshold):
+    log_entry = pd.DataFrame([{
+        "time": datetime.datetime.now(),
+        "demand": demand,
+        "threshold": threshold
+    }])
+
+    try:
+        log_entry.to_csv("alerts.csv", mode="a", header=not os.path.exists("alerts.csv"), index=False)
+    except:
+        pass
+
+# =========================
+# ALERT LOGIC (ANTI-SPAM)
+# =========================
+current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+if "alert_sent" not in st.session_state:
+    st.session_state.alert_sent = False
+
+if peak_demand > threshold:
     st.error("⚠️ High Demand Alert!")
 
-    success, info = send_bulk_alert(
-        f"High energy demand detected: {int(np.max(predictions))} MW"
-    )
+    if not st.session_state.alert_sent:
+        message = f"""
+⚡ SMART GRID ALERT ⚡
 
-    if success:
-        st.success(f"📧 Alert sent to {info} subscribers!")
-    else:
-        st.warning(f"Email failed: {info}")
+High energy demand detected!
+
+Demand: {peak_demand} MW
+Threshold: {threshold} MW
+Time: {current_time}
+
+Action: Monitor grid or activate backup supply.
+"""
+
+        subject = f"⚠️ High Energy Demand Alert ({peak_demand} MW)"
+
+        success, info = send_bulk_alert(message, subject)
+
+        if success:
+            st.success(f"📧 Alert sent to {info} subscribers!")
+            log_alert(peak_demand, threshold)
+            st.session_state.alert_sent = True
+        else:
+            st.warning(f"Email failed: {info}")
+
+else:
+    st.session_state.alert_sent = False
 
 # =========================
 # TEST BUTTON
@@ -158,7 +207,10 @@ if np.max(predictions) > threshold:
 st.subheader("🧪 Test Alert System")
 
 if st.button("Send Test Alert to Subscribers"):
-    success, info = send_bulk_alert("Test alert from SmartGridAI 🚀")
+    success, info = send_bulk_alert(
+        "Test alert from SmartGridAI 🚀",
+        "🧪 SmartGridAI Test Alert"
+    )
 
     if success:
         st.success(f"Test email sent to {info} subscribers!")
