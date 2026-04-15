@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
-import yagmail
+import datetime
 import os
 
 # =========================
@@ -10,19 +10,16 @@ import os
 # =========================
 st.set_page_config(page_title="SmartGridAI", layout="wide")
 
-# =========================
-# TITLE
-# =========================
-st.title("⚡ SmartGridAI Dashboard")
-st.markdown("AI-powered Energy Demand Forecasting & Alert System")
+st.title("⚡ SmartGridAI - Live Grid Monitor")
+st.markdown("Real-Time AI Energy Monitoring System")
 
 # =========================
-# SIDEBAR CONTROLS
+# SIDEBAR
 # =========================
-st.sidebar.header("Controls")
+st.sidebar.header("⚙️ Controls")
 
-num_days = st.sidebar.slider("Select Days", 1, 30, 7)
-temp_input = st.sidebar.slider("Temperature (°C)", 20, 45, 30)
+num_days = st.sidebar.slider("Forecast Days", 1, 30, 7)
+temp_input = st.sidebar.slider("Base Temperature (°C)", 20, 45, 30)
 threshold = st.sidebar.slider("Alert Threshold (MW)", 100, 1000, 500)
 
 # =========================
@@ -44,8 +41,84 @@ model = RandomForestRegressor(n_estimators=200, random_state=42)
 model.fit(X, y)
 
 # =========================
-# PREDICTION
+# SESSION STATE (LIVE STREAM BUFFER)
 # =========================
+if "live_data" not in st.session_state:
+    st.session_state.live_data = []
+
+if "alert_sent" not in st.session_state:
+    st.session_state.alert_sent = False
+
+# =========================
+# GENERATE LIVE DATA POINT
+# =========================
+live_temp = temp_input + np.random.normal(0, 1)
+
+live_demand = model.predict([[len(df), live_temp]])[0]
+
+current_time = datetime.datetime.now()
+
+# store last 50 points (rolling window)
+st.session_state.live_data.append({
+    "time": current_time,
+    "demand": live_demand
+})
+
+st.session_state.live_data = st.session_state.live_data[-50:]
+
+live_df = pd.DataFrame(st.session_state.live_data)
+
+# =========================
+# LIVE STATUS ENGINE
+# =========================
+if live_demand > threshold:
+    status = "🔴 CRITICAL"
+else:
+    status = "🟢 NORMAL"
+
+# =========================
+# LIVE DASHBOARD
+# =========================
+st.subheader("⚡ Live Grid Status")
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric("Live Demand", f"{int(live_demand)} MW")
+col2.metric("Grid Status", status)
+col3.metric("Threshold", f"{threshold} MW")
+
+# =========================
+# ALERT ENGINE (ANTI-SPAM)
+# =========================
+if live_demand > threshold:
+    st.error("⚠️ LIVE GRID ALERT")
+
+    if not st.session_state.alert_sent:
+        st.warning("🚨 Alert Triggered")
+        st.session_state.alert_sent = True
+
+else:
+    st.success("✔ Grid Stable")
+    st.session_state.alert_sent = False
+
+# =========================
+# LIVE STREAM CHART
+# =========================
+st.subheader("📊 Live Demand Stream")
+
+if not live_df.empty:
+    chart_df = live_df.set_index("time")
+
+    # Add threshold line
+    chart_df["threshold"] = threshold
+
+    st.line_chart(chart_df)
+
+# =========================
+# FORECAST (STILL AVAILABLE)
+# =========================
+st.subheader("📈 Forecast")
+
 future_time = np.arange(len(df), len(df) + num_days)
 future_temp = np.full(num_days, temp_input)
 
@@ -56,111 +129,34 @@ future_df = pd.DataFrame({
 
 predictions = model.predict(future_df)
 
-# =========================
-# METRICS
-# =========================
-col1, col2, col3 = st.columns(3)
-
-col1.metric("Avg Demand", f"{int(np.mean(predictions))} MW")
-col2.metric("Peak Demand", f"{int(np.max(predictions))} MW")
-col3.metric("Min Demand", f"{int(np.min(predictions))} MW")
-
-# =========================
-# CHART
-# =========================
-st.subheader("📊 Demand Forecast")
-
-chart_df = pd.DataFrame({
+forecast_df = pd.DataFrame({
     "Day": range(num_days),
-    "Predicted Demand": predictions
+    "Prediction": predictions,
+    "Threshold": [threshold] * num_days
 })
 
-st.line_chart(chart_df.set_index("Day"))
+st.line_chart(forecast_df.set_index("Day"))
 
 # =========================
-# TABLE
+# CONTROL BUTTON (SIMULATE STREAM STEP)
 # =========================
-st.subheader("📋 Forecast Data")
-st.dataframe(chart_df)
+st.subheader("🧪 Control")
 
-# =========================
-# SUBSCRIPTION SYSTEM
-# =========================
-st.subheader("📩 Subscribe for Alerts")
-
-subscriber_email = st.text_input("Enter your email")
-
-def save_subscriber(email):
-    if email:
-        with open("subscribers.txt", "a+") as f:
-            f.seek(0)
-            emails = f.read().splitlines()
-            if email not in emails:
-                f.write(email + "\n")
-                return True
-    return False
-
-if st.button("Subscribe"):
-    if save_subscriber(subscriber_email):
-        st.success("✅ Subscribed successfully!")
-    else:
-        st.warning("⚠️ Already subscribed or invalid input")
-
-def get_subscribers():
-    try:
-        with open("subscribers.txt", "r") as f:
-            return [line.strip() for line in f.readlines()]
-    except FileNotFoundError:
-        return []
+if st.button("▶️ Generate Next Data Point"):
+    st.rerun()
 
 # =========================
-# EMAIL FUNCTION (SECURE)
+# AUTO MODE (OPTIONAL)
 # =========================
-def send_bulk_alert(message):
-    try:
-        yag = yagmail.SMTP(
-            user=os.getenv("EMAIL_USER"),
-            password=os.getenv("EMAIL_PASS")
-        )
+auto_mode = st.checkbox("Enable Auto Refresh (Real-Time Mode)")
 
-        subscribers = get_subscribers()
-
-        for email in subscribers:
-            yag.send(
-                to=email,
-                subject="⚡ SmartGridAI Alert",
-                contents=message
-            )
-
-        return True, len(subscribers)
-
-    except Exception as e:
-        return False, str(e)
+if auto_mode:
+    import time
+    time.sleep(2)
+    st.rerun()
 
 # =========================
-# ALERT LOGIC
+# FOOTER
 # =========================
-if np.max(predictions) > threshold:
-    st.error("⚠️ High Demand Alert!")
-
-    success, info = send_bulk_alert(
-        f"High energy demand detected: {int(np.max(predictions))} MW"
-    )
-
-    if success:
-        st.success(f"📧 Alert sent to {info} subscribers!")
-    else:
-        st.warning(f"Email failed: {info}")
-
-# =========================
-# TEST BUTTON
-# =========================
-st.subheader("🧪 Test Alert System")
-
-if st.button("Send Test Alert to Subscribers"):
-    success, info = send_bulk_alert("Test alert from SmartGridAI 🚀")
-
-    if success:
-        st.success(f"Test email sent to {info} subscribers!")
-    else:
-        st.error(f"Error: {info}")
+st.markdown("---")
+st.markdown("🟢 SmartGridAI Live Engine Running | Real-Time Mode Enabled")
