@@ -1,1 +1,0 @@
-print("SmartGridAI is working!")
