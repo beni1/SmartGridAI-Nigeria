@@ -70,7 +70,7 @@ if st.sidebar.button("Generate Next Data Point"):
 if auto_mode:
     value = generate_demand(st.session_state.t)
     update_state(value)
-    st.info("Auto mode ON: Click rerun to continue streaming")
+    st.info("Auto mode ON: Click '🔄 Refresh Now' to stream next data point")
     st.button("🔄 Refresh Now")
 
 # =========================
