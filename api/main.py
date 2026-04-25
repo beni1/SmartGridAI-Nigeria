@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Depends
 from dotenv import load_dotenv
 
-# Load environment variables (.env)
 load_dotenv()
 
 from api.model import generate_demand
@@ -14,5 +13,6 @@ def root():
     return {"message": "SmartGridAI API is running"}
 
 @app.get("/demand")
-def get_demand(api_key: str = Depends(verify_api_key)):
+def get_demand(auth=Depends(verify_api_key)):
+    api_key, plan = auth
     return generate_demand()
