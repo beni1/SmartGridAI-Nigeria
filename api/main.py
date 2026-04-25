@@ -1,4 +1,9 @@
 from fastapi import FastAPI, Depends
+from dotenv import load_dotenv
+
+# Load environment variables (.env)
+load_dotenv()
+
 from api.model import generate_demand
 from api.auth import verify_api_key
 
