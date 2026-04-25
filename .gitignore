@@ -1,2 +1,19 @@
 .ipynb_checkpoints/
 __pycache__/
+
+# Python
+__pycache__/
+*.pyc
+
+# Environment
+smartgrid-env/
+.env
+
+# Mac
+.DS_Store
+
+# Streamlit
+.streamlit/
+
+# Logs
+*.log
